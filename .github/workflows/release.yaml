@@ -19,8 +19,9 @@ jobs:
       - id: get-latest-versions
         name: Get latest versions
         run: |
-          echo "::set-output name=${GITHUB_REPOSITORY/\//_}::$(curl -s https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest | grep tag_name | cut -d '"' -f 4)"
-          echo "::set-output name=${PROJECT/\//_}::$(curl -s https://api.github.com/repos/${{ env.PROJECT }}/releases/latest | grep tag_name | cut -d '"' -f 4)"
+          LATEST_VERSION=$(curl -s https://api.github.com/repos/${{ env.PROJECT }}/releases/latest | grep tag_name | cut -d '"' -f 4)
+          echo "::set-output name=${PROJECT/\//_}::$LATEST_VERSION"
+          echo "::set-output name=version-exists::$(curl -s -I -o /dev/null -w "%{http_code}" --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' https://ghcr.io/v2/${{ github.repository }}/manifests/$LATEST_VERSION)"
       - name: Check out aws-iam-authenticator
         run: git -c advice.detachedHead=false clone --depth 1 --branch ${{ steps.get-latest-versions.outputs.kubernetes-sigs_aws-iam-authenticator }}  https://github.com/${PROJECT}.git
       - name: Install QEMU
@@ -40,8 +41,10 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ steps.get-latest-versions.outputs.kubernetes-sigs_aws-iam-authenticator }}
       - name: Build and push
-        if: ${{ steps.get-latest-versions.outputs.kubernetes-sigs_aws-iam-authenticator != steps.get-latest-versions.outputs.kissy_aws-iam-authenticator-arm }}
+        if: ${{ steps.get-latest-versions.outputs.version-exists != '200' }}
         uses: docker/build-push-action@v2
         with:
           context: .
